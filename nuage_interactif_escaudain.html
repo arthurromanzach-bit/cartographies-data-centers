@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Cartographie interactive — Escaudain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#f8fafc;--panel:#ffffff;--text:#0f172a;--muted:#64748b;--border:#e2e8f0;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);}
+header{padding:18px 22px 12px;background:linear-gradient(90deg,#0f172a,#334155);color:white;}
+header h1{margin:0;font-size:22px;letter-spacing:-.02em;}
+header p{margin:6px 0 0;color:#cbd5e1;font-size:13px;}
+#wrap{display:grid;grid-template-columns:315px 1fr 350px;min-height:calc(100vh - 74px);}
+aside,#details{background:var(--panel);border-right:1px solid var(--border);padding:16px;overflow:auto;}
+#details{border-right:0;border-left:1px solid var(--border);}
+#chart{position:relative;overflow:hidden;}
+svg{width:100%;height:100%;display:block;cursor:grab;background:radial-gradient(circle at 30% 25%, rgba(37,99,235,.08), transparent 28%),radial-gradient(circle at 70% 60%, rgba(22,163,74,.08), transparent 32%),#f8fafc;}
+.controls label{display:flex;align-items:center;gap:8px;margin:9px 0;font-size:13px;}
+.controls input[type="text"]{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:10px;font-size:13px;}
+.btnrow{display:flex;gap:8px;margin:12px 0 8px;}
+button{border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:12px;}
+button:hover{background:#f1f5f9;}
+.legend-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;}
+.hint{color:var(--muted);font-size:12px;line-height:1.35;padding:10px;border:1px dashed var(--border);border-radius:10px;margin-bottom:14px;background:#f8fafc;}
+.node circle{stroke:#fff;stroke-width:2px;filter:drop-shadow(0 2px 5px rgba(15,23,42,.18));}
+.node text{font-size:11px;font-weight:650;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round;fill:#0f172a;pointer-events:none;text-anchor:middle;}
+.link{stroke:#94a3b8;stroke-opacity:.42;stroke-width:1.2;}
+.node.dim,.link.dim{opacity:.12;}
+.node.hidden,.link.hidden{display:none;}
+.selected circle{stroke:#0f172a;stroke-width:3.2px;}
+#details h2{margin:0 0 8px;font-size:20px;}
+.pill{display:inline-block;border-radius:999px;color:white;padding:5px 9px;font-size:12px;font-weight:700;margin-bottom:12px;}
+#details p{font-size:14px;line-height:1.45;}
+.mini{color:var(--muted);font-size:12px;margin-top:18px;}
+.tooltip{position:absolute;pointer-events:none;background:#0f172a;color:white;padding:7px 9px;border-radius:8px;font-size:12px;opacity:0;transform:translate(-50%,-120%);white-space:nowrap;z-index:5;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cartographie interactive des acteurs — Escaudain</h1>
+  <p>Nuage relationnel : projet central, élus territoriaux, consortium Brookfield / BT Immo / Data4, RTE, cadre étatique, formation/emploi et points de vigilance.</p>
+</header>
+<div id="wrap">
+  <aside>
+    <div class="hint">Utilisation : recherche, filtres par famille, clic sur un nœud pour ouvrir sa fiche. Les nœuds sont déplaçables ; molette = zoom.</div>
+    <div class="controls">
+      <input id="search" type="text" placeholder="Rechercher un acteur, institution, média...">
+      <div class="btnrow"><button id="reset">Réinitialiser</button><button id="center">Recentrer</button></div>
+      <strong>Filtres</strong><div id="checks"></div><div class="count" id="count"></div>
+    </div>
+  </aside>
+  <main id="chart"><div class="tooltip" id="tooltip"></div><svg id="svg"></svg></main>
+  <section id="details">
+    <h2>Campus de data centers — Escaudain</h2>
+    <span class="pill" style="background:#111827">Projet central</span>
+    <p>Projet de campus de data centers IA prévu à Escaudain sur l’ancienne friche Usinor, avec un investissement annoncé d’environ 5 milliards d’euros et une mise en service visée autour de 2030.</p>
+    <p class="mini">Lecture rapide : plus le nœud est gros, plus l’acteur est structurant dans le corpus.</p>
+  </section>
+</div>
+<script>
+const graph = {"nodes": [{"id": "Campus de data centers — Escaudain", "label": "Campus data centers\nEscaudain", "group": "Projet central", "size": 30, "detail": "Projet de campus de data centers IA prévu à Escaudain sur l’ancienne friche Usinor, avec un investissement annoncé d’environ 5 milliards d’euros et une mise en service visée autour de 2030."}, {"id": "Friche Usinor / zone des Soufflantes", "label": "Friche Usinor\nzone des Soufflantes", "group": "Projet central", "size": 22, "detail": "Ancien site sidérurgique d’environ 38 hectares à Escaudain, support foncier du futur campus de data centers."}, {"id": "Escaudain", "label": "Escaudain", "group": "Projet central", "size": 22, "detail": "Commune d’implantation du projet, dans le Valenciennois."}, {"id": "Campus, pépinière et incubateur", "label": "Campus,\npépinière\n& incubateur", "group": "Projet central", "size": 22, "detail": "Écosystème complémentaire évoqué autour du data center : campus de formation, pépinière d’entreprises et incubateur pour accompagner la reconversion économique du territoire."}, {"id": "Aymeric Robin", "label": "Aymeric Robin", "group": "Élus / acteurs territoriaux moteurs", "size": 24, "detail": "Président de la Communauté d’agglomération de La Porte du Hainaut et maire de Raismes. Porte politiquement le projet et insiste sur la réindustrialisation, l’emploi et la formation."}, {"id": "Bruno Saligot", "label": "Bruno Saligot", "group": "Élus / acteurs territoriaux moteurs", "size": 24, "detail": "Maire d’Escaudain et vice-président de l’agglomération en charge de l’environnement et du développement durable. Défend le projet et précise la montée en puissance progressive des emplois."}, {"id": "Émilie Gérard", "label": "Émilie Gérard", "group": "Élus / acteurs territoriaux moteurs", "size": 18, "detail": "Chargée d’affaires développement économique de La Porte du Hainaut. Met en avant les avantages techniques du site, notamment la proximité du poste de Mastaing et la capacité de raccordement."}, {"id": "Communauté d’agglomération de La Porte du Hainaut", "label": "Communauté d’agglo\nde La Porte du Hainaut", "group": "Élus / acteurs territoriaux moteurs", "size": 24, "detail": "Collectivité territoriale centrale du dossier. Elle choisit le consortium retenu et structure le récit local de reconversion industrielle."}, {"id": "Raismes", "label": "Raismes", "group": "Élus / acteurs territoriaux moteurs", "size": 15, "detail": "Commune liée au dossier via Aymeric Robin, qui en est le maire."}, {"id": "Brookfield", "label": "Brookfield", "group": "Porteurs industriels / économiques", "size": 24, "detail": "Fonds d’investissement canadien membre du consortium retenu pour le futur campus de data centers d’Escaudain."}, {"id": "BT Immo", "label": "BT Immo", "group": "Porteurs industriels / économiques", "size": 24, "detail": "Acteur immobilier / constructeur membre du consortium retenu avec Brookfield et Data4."}, {"id": "Data4", "label": "Data4", "group": "Porteurs industriels / économiques", "size": 24, "detail": "Opérateur de data centers membre du consortium retenu pour développer le campus d’Escaudain."}, {"id": "AWS / Amazon Web Services", "label": "AWS\nAmazon Web Services", "group": "Porteurs industriels / économiques", "size": 15, "detail": "Acteur candidat cité comme ayant répondu à l’appel à manifestation d’intérêt, mais non retenu face au consortium Brookfield / BT Immo / Data4."}, {"id": "Usinor", "label": "Usinor", "group": "Porteurs industriels / économiques", "size": 15, "detail": "Ancien groupe sidérurgique dont la friche sert de support au projet ; symbole de la reconversion économique du territoire."}, {"id": "RTE", "label": "RTE", "group": "Énergie / raccordement", "size": 24, "detail": "Gestionnaire du réseau de transport d’électricité. Acteur clé du raccordement du site, qui figure parmi les sites fast track capables d’accueillir plus de 700 MW."}, {"id": "Nathalie Lemaître", "label": "Nathalie Lemaître", "group": "Énergie / raccordement", "size": 18, "detail": "Directrice générale du pôle Clients Systèmes Innovation chez RTE. Intervient dans le cadrage national des raccordements et la priorisation des projets."}, {"id": "Poste de Mastaing", "label": "Poste de Mastaing", "group": "Énergie / raccordement", "size": 15, "detail": "Infrastructure électrique structurante située à proximité du site, mise en avant pour justifier la rapidité possible du raccordement."}, {"id": "Enedis", "label": "Enedis", "group": "Énergie / raccordement", "size": 15, "detail": "Acteur du paysage régional de l’électrification, cité dans des réunions plus larges autour des projets data centers dans le Nord."}, {"id": "700 MW", "label": "700 MW", "group": "Énergie / raccordement", "size": 15, "detail": "Capacité de raccordement mise en avant comme objectif à terme pour le site d’Escaudain."}, {"id": "Anne Le Hénanff", "label": "Anne Le Hénanff", "group": "État / cadrage national", "size": 18, "detail": "Ministre déléguée chargée de l’Intelligence artificielle et du Numérique. Associe Escaudain à la politique nationale de sécurisation et d’accélération des data centers."}, {"id": "Roland Lescure", "label": "Roland Lescure", "group": "État / cadrage national", "size": 15, "detail": "Ministre de l’Économie, des Finances, de la souveraineté industrielle, énergétique et numérique. Cité dans le cadrage national d’accompagnement des projets."}, {"id": "DGE", "label": "DGE", "group": "État / cadrage national", "size": 15, "detail": "Direction générale des entreprises. Partie prenante du dispositif national d’accompagnement des data centers."}, {"id": "Business France", "label": "Business France", "group": "État / cadrage national", "size": 15, "detail": "Acteur de la task force de l’État accompagnant les porteurs de projets."}, {"id": "François Bayrou", "label": "François Bayrou", "group": "État / cadrage national", "size": 15, "detail": "Ancien Premier ministre cité dans le contexte de l’annonce des sites industriels dits « clés en main » pour les data centers."}, {"id": "2 400 emplois à terme", "label": "2 400 emplois à terme", "group": "Formation / emploi", "size": 18, "detail": "Promesse centrale du projet, mise en avant par les élus locaux, avec environ 600 emplois dans une première phase."}, {"id": "Université", "label": "Université", "group": "Formation / emploi", "size": 15, "detail": "Acteur évoqué pour structurer les futures filières de formation liées au projet."}, {"id": "Lycées", "label": "Lycées", "group": "Formation / emploi", "size": 15, "detail": "Acteurs éducatifs mentionnés comme nécessaires pour préparer les compétences du territoire."}, {"id": "Éducation nationale", "label": "Éducation nationale", "group": "Formation / emploi", "size": 15, "detail": "Partie prenante citée pour développer les formations adaptées aux métiers du futur campus."}, {"id": "Recherche, maintenance et exploitation", "label": "Recherche, maintenance et exploitation", "group": "Formation / emploi", "size": 15, "detail": "Ensemble de métiers et fonctions mis en avant dans le récit du projet."}, {"id": "Consommation électrique", "label": "Consommation électrique", "group": "Points de vigilance / griefs", "size": 18, "detail": "Le projet suppose une très forte demande de puissance, avec 700 MW visés à terme."}, {"id": "Consommation d’eau", "label": "Consommation d’eau", "group": "Points de vigilance / griefs", "size": 17, "detail": "Question classique autour des data centers. Les promoteurs du projet défendent l’idée d’un fonctionnement en circuit fermé et d’une consommation maîtrisée."}, {"id": "Crédibilité des emplois annoncés", "label": "Crédibilité des emplois annoncés", "group": "Points de vigilance / griefs", "size": 17, "detail": "Le volume de 2 400 emplois est au cœur du discours local, mais constitue aussi un point de vigilance analytique."}, {"id": "Acceptabilité locale", "label": "Acceptabilité locale", "group": "Points de vigilance / griefs", "size": 17, "detail": "Sujet mentionné dans le cadrage national des projets data centers, même si aucune opposition locale structurée n’apparaît ici."}, {"id": "Pas d’opposition locale structurée identifiée", "label": "Pas d’opposition locale structurée identifiée", "group": "Points de vigilance / griefs", "size": 17, "detail": "Dans le corpus étudié, aucun collectif local d’opposition ou opposant local nommément cité n’apparaît clairement à ce stade pour Escaudain."}, {"id": "DCmag", "label": "DCmag", "group": "Médias / sources cités", "size": 15, "detail": "Média spécialisé ayant relayé le choix du consortium Brookfield / BT Immo / Data4."}, {"id": "La Voix du Nord", "label": "La Voix du Nord", "group": "Médias / sources cités", "size": 15, "detail": "Source régionale centrale sur le projet d’Escaudain."}, {"id": "France 3 Régions", "label": "France 3 Régions", "group": "Médias / sources cités", "size": 15, "detail": "Média ayant détaillé le projet, ses emplois annoncés et les éléments techniques liés au raccordement."}, {"id": "20 Minutes", "label": "20 Minutes", "group": "Médias / sources cités", "size": 15, "detail": "Source nationale relayant l’officialisation du projet près de Valenciennes."}, {"id": "Economie Matin", "label": "Economie Matin", "group": "Médias / sources cités", "size": 15, "detail": "Source revenant sur la dimension stratégique et souveraine du projet."}, {"id": "Les Smart Grids", "label": "Les Smart Grids", "group": "Médias / sources cités", "size": 15, "detail": "Source centrée sur la dimension énergétique et technique du campus."}, {"id": "Next", "label": "Next", "group": "Médias / sources cités", "size": 15, "detail": "Source évoquant Escaudain dans le cadre national des sites fast track."}], "links": [{"source": "Campus de data centers — Escaudain", "target": "Friche Usinor / zone des Soufflantes", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Escaudain", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Campus, pépinière et incubateur", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Aymeric Robin", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Bruno Saligot", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Émilie Gérard", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Communauté d’agglomération de La Porte du Hainaut", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Raismes", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Brookfield", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "BT Immo", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Data4", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "AWS / Amazon Web Services", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Usinor", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "RTE", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Nathalie Lemaître", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Poste de Mastaing", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Enedis", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "700 MW", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Anne Le Hénanff", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Roland Lescure", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "DGE", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Business France", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "François Bayrou", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "2 400 emplois à terme", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Université", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Lycées", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Éducation nationale", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Recherche, maintenance et exploitation", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Consommation électrique", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Consommation d’eau", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Crédibilité des emplois annoncés", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Acceptabilité locale", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Pas d’opposition locale structurée identifiée", "kind": "rôle / position"}, {"source": "Campus de data centers — Escaudain", "target": "Friche Usinor / zone des Soufflantes", "kind": "interaction / rattachement"}, {"source": "Campus de data centers — Escaudain", "target": "Escaudain", "kind": "interaction / rattachement"}, {"source": "Campus de data centers — Escaudain", "target": "Campus, pépinière et incubateur", "kind": "interaction / rattachement"}, {"source": "Aymeric Robin", "target": "Communauté d’agglomération de La Porte du Hainaut", "kind": "interaction / rattachement"}, {"source": "Aymeric Robin", "target": "Raismes", "kind": "interaction / rattachement"}, {"source": "Aymeric Robin", "target": "2 400 emplois à terme", "kind": "interaction / rattachement"}, {"source": "Aymeric Robin", "target": "Campus, pépinière et incubateur", "kind": "interaction / rattachement"}, {"source": "Bruno Saligot", "target": "Escaudain", "kind": "interaction / rattachement"}, {"source": "Bruno Saligot", "target": "2 400 emplois à terme", "kind": "interaction / rattachement"}, {"source": "Bruno Saligot", "target": "Université", "kind": "interaction / rattachement"}, {"source": "Bruno Saligot", "target": "Lycées", "kind": "interaction / rattachement"}, {"source": "Bruno Saligot", "target": "Éducation nationale", "kind": "interaction / rattachement"}, {"source": "Émilie Gérard", "target": "Poste de Mastaing", "kind": "interaction / rattachement"}, {"source": "Émilie Gérard", "target": "700 MW", "kind": "interaction / rattachement"}, {"source": "Communauté d’agglomération de La Porte du Hainaut", "target": "Brookfield", "kind": "interaction / rattachement"}, {"source": "Communauté d’agglomération de La Porte du Hainaut", "target": "BT Immo", "kind": "interaction / rattachement"}, {"source": "Communauté d’agglomération de La Porte du Hainaut", "target": "Data4", "kind": "interaction / rattachement"}, {"source": "Communauté d’agglomération de La Porte du Hainaut", "target": "AWS / Amazon Web Services", "kind": "interaction / rattachement"}, {"source": "Brookfield", "target": "BT Immo", "kind": "interaction / rattachement"}, {"source": "Brookfield", "target": "Data4", "kind": "interaction / rattachement"}, {"source": "BT Immo", "target": "Data4", "kind": "interaction / rattachement"}, {"source": "RTE", "target": "Poste de Mastaing", "kind": "interaction / rattachement"}, {"source": "RTE", "target": "700 MW", "kind": "interaction / rattachement"}, {"source": "RTE", "target": "Consommation électrique", "kind": "interaction / rattachement"}, {"source": "Nathalie Lemaître", "target": "RTE", "kind": "interaction / rattachement"}, {"source": "Anne Le Hénanff", "target": "RTE", "kind": "interaction / rattachement"}, {"source": "Anne Le Hénanff", "target": "DGE", "kind": "interaction / rattachement"}, {"source": "Anne Le Hénanff", "target": "Business France", "kind": "interaction / rattachement"}, {"source": "Roland Lescure", "target": "DGE", "kind": "interaction / rattachement"}, {"source": "Consommation électrique", "target": "Consommation d’eau", "kind": "interaction / rattachement"}, {"source": "Crédibilité des emplois annoncés", "target": "2 400 emplois à terme", "kind": "interaction / rattachement"}, {"source": "Acceptabilité locale", "target": "Pas d’opposition locale structurée identifiée", "kind": "interaction / rattachement"}, {"source": "Friche Usinor / zone des Soufflantes", "target": "Usinor", "kind": "interaction / rattachement"}, {"source": "Recherche, maintenance et exploitation", "target": "Université", "kind": "interaction / rattachement"}, {"source": "Recherche, maintenance et exploitation", "target": "Lycées", "kind": "interaction / rattachement"}, {"source": "Recherche, maintenance et exploitation", "target": "Éducation nationale", "kind": "interaction / rattachement"}, {"source": "Campus de data centers — Escaudain", "target": "DCmag", "kind": "source / couverture"}, {"source": "Campus de data centers — Escaudain", "target": "La Voix du Nord", "kind": "source / couverture"}, {"source": "Campus de data centers — Escaudain", "target": "France 3 Régions", "kind": "source / couverture"}, {"source": "Campus de data centers — Escaudain", "target": "20 Minutes", "kind": "source / couverture"}, {"source": "Campus de data centers — Escaudain", "target": "Economie Matin", "kind": "source / couverture"}, {"source": "Campus de data centers — Escaudain", "target": "Les Smart Grids", "kind": "source / couverture"}, {"source": "Campus de data centers — Escaudain", "target": "Next", "kind": "source / couverture"}]};
+const colors = {"Projet central": "#111827", "Élus / acteurs territoriaux moteurs": "#2563eb", "Porteurs industriels / économiques": "#0f766e", "Énergie / raccordement": "#7c3aed", "État / cadrage national": "#9333ea", "Formation / emploi": "#0284c7", "Points de vigilance / griefs": "#f97316", "Médias / sources cités": "#64748b"};
+const groups = ["Formation / emploi", "Médias / sources cités", "Points de vigilance / griefs", "Porteurs industriels / économiques", "Projet central", "Élus / acteurs territoriaux moteurs", "Énergie / raccordement", "État / cadrage national"];
+const central = "Campus de data centers — Escaudain";
+const svg = document.getElementById('svg'), chart = document.getElementById('chart'), details = document.getElementById('details'), tooltip = document.getElementById('tooltip'), checks = document.getElementById('checks'), countEl = document.getElementById('count');
+let width = chart.clientWidth, height = chart.clientHeight;
+svg.setAttribute('viewBox', [0,0,width,height].join(' '));
+const ns = "http://www.w3.org/2000/svg";
+const g = document.createElementNS(ns,'g'); svg.appendChild(g);
+const linkG = document.createElementNS(ns,'g'), nodeG = document.createElementNS(ns,'g'); g.appendChild(linkG); g.appendChild(nodeG);
+const activeGroups = new Set(groups);
+groups.forEach(gr => {
+  const label = document.createElement('label');
+  label.innerHTML = `<input type="checkbox" checked value="${gr}"><span class="legend-dot" style="background:${colors[gr]}"></span><span>${gr}</span>`;
+  checks.appendChild(label);
+});
+checks.addEventListener('change', e => {
+  if(e.target.type === 'checkbox') {
+    e.target.checked ? activeGroups.add(e.target.value) : activeGroups.delete(e.target.value);
+    applyFilters();
+  }
+});
+const nodes = graph.nodes.map(d => Object.assign({}, d));
+const nodeById = new Map(nodes.map(d => [d.id,d]));
+const links = graph.links.map(d => Object.assign({}, d, {source: nodeById.get(d.source), target: nodeById.get(d.target)})).filter(d => d.source && d.target);
+const linkEls = links.map(() => {
+  const line = document.createElementNS(ns,'line');
+  line.classList.add('link');
+  linkG.appendChild(line);
+  return line;
+});
+const nodeEls = nodes.map(n => {
+  const el = document.createElementNS(ns,'g');
+  el.classList.add('node');
+  el.dataset.id = n.id;
+  el.dataset.group = n.group;
+  const c = document.createElementNS(ns,'circle');
+  c.setAttribute('r', n.size);
+  c.setAttribute('fill', colors[n.group] || '#999');
+  const t = document.createElementNS(ns,'text');
+  t.setAttribute('dy', n.size + 13);
+  n.label.split('\n').forEach((part,i) => {
+    const tsp = document.createElementNS(ns,'tspan');
+    tsp.textContent = part;
+    tsp.setAttribute('x', 0);
+    tsp.setAttribute('dy', i===0 ? 0 : 12);
+    t.appendChild(tsp);
+  });
+  el.appendChild(c); el.appendChild(t); nodeG.appendChild(el);
+  el.addEventListener('click', () => selectNode(n));
+  el.addEventListener('mouseenter', ev => showTip(n, ev));
+  el.addEventListener('mousemove', ev => showTip(n, ev));
+  el.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+  drag(el,n);
+  return el;
+});
+function initialPosition() {
+  const ring = {"Projet central":0,"Élus / acteurs territoriaux moteurs":170,"Porteurs industriels / économiques":240,"Énergie / raccordement":300,"État / cadrage national":360,"Formation / emploi":320,"Points de vigilance / griefs":370,"Médias / sources cités":440};
+  const byGroup = {};
+  nodes.forEach(n => (byGroup[n.group] ||= []).push(n));
+  nodes.forEach(n => {
+    if(n.id === central) { n.x = width/2; n.y = height/2; return; }
+    const arr = byGroup[n.group], idx = arr.indexOf(n), total = arr.length;
+    let base = Object.keys(byGroup).indexOf(n.group) * 0.62;
+    if(n.group === "Porteurs industriels / économiques") base = -0.2;
+    if(n.group === "Points de vigilance / griefs") base = 2.35;
+    const angle = base + idx * (Math.PI*2/Math.max(total,1));
+    const r = ring[n.group] || 300;
+    n.x = width/2 + Math.cos(angle)*r;
+    n.y = height/2 + Math.sin(angle)*r;
+  });
+}
+initialPosition();
+function tick() {
+  for(let k=0;k<2;k++) {
+    links.forEach(l => {
+      const dx = l.target.x-l.source.x, dy = l.target.y-l.source.y;
+      const dist = Math.hypot(dx,dy) || 1;
+      const desired = (l.source.id===central || l.target.id===central) ? 170 : 120;
+      const f = (dist-desired)*0.012;
+      const fx = dx/dist*f, fy = dy/dist*f;
+      if(!l.source.fixed) { l.source.x += fx; l.source.y += fy; }
+      if(!l.target.fixed) { l.target.x -= fx; l.target.y -= fy; }
+    });
+    for(let i=0;i<nodes.length;i++) for(let j=i+1;j<nodes.length;j++) {
+      const a=nodes[i], b=nodes[j], dx=b.x-a.x, dy=b.y-a.y;
+      const dist=Math.hypot(dx,dy)||1, min=a.size+b.size+38;
+      if(dist < min) {
+        const f=(min-dist)/dist*0.028;
+        if(!a.fixed) {a.x-=dx*f; a.y-=dy*f;}
+        if(!b.fixed) {b.x+=dx*f; b.y+=dy*f;}
+      }
+    }
+    nodes.forEach(n => {
+      if(n.id !== central && !n.fixed) {
+        n.x += (width/2 - n.x)*0.0015;
+        n.y += (height/2 - n.y)*0.0015;
+      }
+      n.x = Math.max(40, Math.min(width-40, n.x));
+      n.y = Math.max(40, Math.min(height-40, n.y));
+    });
+  }
+  linkEls.forEach((el,i) => {
+    const l=links[i];
+    el.setAttribute('x1',l.source.x); el.setAttribute('y1',l.source.y);
+    el.setAttribute('x2',l.target.x); el.setAttribute('y2',l.target.y);
+  });
+  nodeEls.forEach((el,i) => el.setAttribute('transform',`translate(${nodes[i].x},${nodes[i].y})`));
+  requestAnimationFrame(tick);
+}
+tick();
+function selectNode(n) {
+  nodeEls.forEach(el => el.classList.remove('selected','dim'));
+  linkEls.forEach(el => el.classList.remove('dim'));
+  const neigh = new Set([n.id]);
+  links.forEach(l => {
+    if(l.source.id===n.id) neigh.add(l.target.id);
+    if(l.target.id===n.id) neigh.add(l.source.id);
+  });
+  nodeEls.forEach(el => {
+    if(!neigh.has(el.dataset.id)) el.classList.add('dim');
+    if(el.dataset.id===n.id) el.classList.add('selected');
+  });
+  linkEls.forEach((el,i) => {
+    const l=links[i];
+    if(l.source.id!==n.id && l.target.id!==n.id) el.classList.add('dim');
+  });
+  details.innerHTML = `<h2>${escapeHtml(n.id)}</h2><span class="pill" style="background:${colors[n.group]}">${escapeHtml(n.group)}</span><p>${escapeHtml(n.detail)}</p><p class="mini"><strong>Connexions visibles :</strong> ${[...neigh].filter(x=>x!==n.id).map(escapeHtml).join(', ') || 'aucune'}</p>`;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+function showTip(n, ev) {
+  tooltip.textContent = n.id + " — " + n.group;
+  tooltip.style.opacity = 1;
+  const rect = chart.getBoundingClientRect();
+  tooltip.style.left = (ev.clientX - rect.left) + 'px';
+  tooltip.style.top = (ev.clientY - rect.top) + 'px';
+}
+function applyFilters() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  let visible = 0;
+  nodeEls.forEach((el,i) => {
+    const n = nodes[i];
+    const ok = activeGroups.has(n.group) && (!q || (n.id + " " + n.group + " " + n.detail).toLowerCase().includes(q));
+    el.classList.toggle('hidden', !ok);
+    if(ok) visible++;
+  });
+  linkEls.forEach((el,i) => {
+    const l = links[i];
+    const sEl = nodeEls[nodes.indexOf(l.source)];
+    const tEl = nodeEls[nodes.indexOf(l.target)];
+    el.classList.toggle('hidden', sEl.classList.contains('hidden') || tEl.classList.contains('hidden'));
+  });
+  countEl.textContent = visible + " nœuds affichés sur " + nodes.length;
+}
+document.getElementById('search').addEventListener('input', applyFilters);
+applyFilters();
+document.getElementById('reset').onclick = () => {
+  document.getElementById('search').value = "";
+  document.querySelectorAll('#checks input').forEach(cb => { cb.checked = true; activeGroups.add(cb.value); });
+  nodeEls.forEach(el => el.classList.remove('selected','dim','hidden'));
+  linkEls.forEach(el => el.classList.remove('dim','hidden'));
+  applyFilters();
+};
+document.getElementById('center').onclick = () => { currentZoom = 1; panX = 0; panY = 0; updateTransform(); };
+function drag(el,n) {
+  let down=false, ox=0, oy=0;
+  el.addEventListener('pointerdown', ev => { down=true; n.fixed=true; el.setPointerCapture(ev.pointerId); const pt = toSvg(ev); ox = n.x-pt.x; oy=n.y-pt.y; });
+  el.addEventListener('pointermove', ev => { if(!down) return; const pt=toSvg(ev); n.x=pt.x+ox; n.y=pt.y+oy; });
+  el.addEventListener('pointerup', ev => { down=false; el.releasePointerCapture(ev.pointerId); });
+}
+let currentZoom=1, panX=0, panY=0, panning=false, sx=0, sy=0;
+function updateTransform() { g.setAttribute('transform', `translate(${panX},${panY}) scale(${currentZoom})`); }
+function toSvg(ev) { const rect = svg.getBoundingClientRect(); return {x:(ev.clientX-rect.left-panX)/currentZoom, y:(ev.clientY-rect.top-panY)/currentZoom}; }
+svg.addEventListener('wheel', ev => { ev.preventDefault(); const scale = ev.deltaY < 0 ? 1.08 : 0.92; currentZoom = Math.max(.35, Math.min(2.8, currentZoom*scale)); updateTransform(); }, {passive:false});
+svg.addEventListener('pointerdown', ev => { if(ev.target===svg) { panning=true; sx=ev.clientX-panX; sy=ev.clientY-panY; svg.style.cursor='grabbing'; } });
+svg.addEventListener('pointermove', ev => { if(panning) { panX=ev.clientX-sx; panY=ev.clientY-sy; updateTransform(); } });
+svg.addEventListener('pointerup', () => { panning=false; svg.style.cursor='grab'; });
+window.addEventListener('resize', () => { width = chart.clientWidth; height = chart.clientHeight; svg.setAttribute('viewBox', [0,0,width,height].join(' ')); });
+</script>
+</body>
+</html>
